@@ -1,0 +1,368 @@
+schema: spec-driven
+
+context: |
+  PRODUCT AND STATUS
+  - Product name: AgentHub.
+  - Target URL: https://agenthub.rudyka.org.
+  - This is a greenfield proof of concept, not a production launch.
+  - The current phase is architecture and specification only.
+  - The platform hosts an isolated OpenClaw cell for each employee and provides a separate governed shared-memory service.
+  - Application languages and frameworks have not been selected. Do not invent them without documenting the decision and alternatives.
+
+  REPOSITORIES
+  - agenthub is the primary engineering repository and owns OpenSpec, architecture, ADRs, threat models, Terraform, deployment configuration, platform services, OpenClaw integration, contracts, tests, and GitHub workflows.
+  - agenthub-synthetic-knowledge owns the governed synthetic knowledge corpus and its validation workflows.
+  - Do not use Git submodules.
+  - Cross-repository tasks must be prefixed with [agenthub] or [agenthub-synthetic-knowledge].
+  - The authoritative knowledge-document schema belongs in agenthub/contracts/knowledge-document-v1.schema.json.
+  - agenthub-synthetic-knowledge consumes that schema for validation.
+
+  POC SCALE
+  - AWS region: us-east-2.
+  - Registered employees: 10.
+  - Expected peak concurrently active OpenClaw cells: 2.
+  - A 15–30 second cold start is acceptable under normal available cluster capacity.
+  - Departments: Sales, Marketing, HR, and Engineering.
+  - Suggested test population: two employees per department, one governance user, and one platform administrator.
+  - Synthetic data only. Real PII, customer data, financial data, production credentials, and production infrastructure changes are prohibited.
+
+  IDENTITY AND AUTHORIZATION
+  - Amazon Cognito is the identity provider.
+  - Users are administrator-created; public signup is disabled.
+  - MFA is required.
+  - Cognito groups are the authoritative source of department, team, and privileged-role membership.
+  - Initial groups:
+    dept-sales
+    dept-marketing
+    dept-hr
+    dept-engineering
+    role-knowledge-owner
+    role-governance
+    role-platform-admin
+  - A user may belong to multiple groups.
+  - Memory grants are additive.
+  - Explicit security, tool, egress, or corporate-policy denies override grants.
+  - The corporate policy ceiling overrides department configuration.
+  - The maximum acceptable delay for group membership and revocation propagation remains a design decision.
+
+  TENANT ROUTING
+  - The edge and tenant router derive the employee identity from a validated Cognito token.
+  - Cell identity is derived from the Cognito sub claim.
+  - A public request must never be allowed to select or override a cell or tenant identifier.
+  - One public hostname may expose /, /api, /cell, and /webhooks/github.
+  - Individual OpenClaw cell services remain private.
+  - Authentication-to-OpenClaw credential bridging and rotation must be explicitly designed.
+
+  OPENCLAW CELL ISOLATION
+  - Use one complete OpenClaw Gateway/cell per user.
+  - Do not share an OpenClaw Gateway between mutually untrusted users.
+  - Each cell has a dedicated Kubernetes namespace, Deployment scaled from zero to one, service account with EKS Pod Identity, EFS access point/PVC, Gateway credential, quotas, resource limits, and default-deny NetworkPolicy.
+  - Cells cannot access another cell's storage, service account, namespace, credentials, sessions, or private memory.
+  - Use KEDA for scale-to-zero.
+  - Keep baseline worker capacity available; do not scale the entire cluster to zero.
+  - Use one EKS cluster and one managed node group with an initial target of min 1, desired 1, max 2.
+  - Do not introduce Karpenter for the POC.
+  - Kubernetes namespace isolation is a POC boundary, not hostile-tenant or VM-grade isolation.
+
+  PRIVATE MEMORY
+  - Private conversation state and personal memory remain inside the employee's cell workspace/session storage.
+  - Private memory is never automatically published to shared memory.
+  - A shared-memory failure must not prevent private OpenClaw usage.
+  - Shared-memory calls require bounded timeouts, circuit breaking, and graceful private-only degradation.
+
+  SHARED MEMORY
+  - Provide a separate Shared Memory Gateway.
+  - Expose shared memory to OpenClaw through MCP and to the portal/control plane through REST.
+  - Workload identity maps cell identity to Cognito user and current Cognito groups before retrieval or mutation.
+  - Supported scopes: corporate, department, team, project, and personal.
+  - Store claims, embeddings, policies, proposals, approvals, disputes, retention metadata, and audit references in PostgreSQL with pgvector.
+  - Store original documents in versioned, SSE-KMS encrypted S3.
+  - Use RDS PostgreSQL Multi-AZ for the POC.
+  - Every retrieved statement must carry:
+    claim ID
+    source URL or S3 object reference
+    source owner
+    knowledge owner
+    source timestamp
+    publication timestamp
+    source document version
+    shared claim version
+    classification
+    current status
+  - A server-side citation/provenance validator is required. Prompt instructions alone are insufficient.
+  - Retrieval must enforce scope, department/team membership, classification, retention, claim status, and current policy before returning content.
+
+  EXPLICIT SHARING
+  - Content can enter shared memory from a private conversation only after the employee explicitly requests “share this” or an equivalent unambiguous action.
+  - The system previews the exact excerpt before submission.
+  - The employee selects an allowed scope and classification.
+  - Submission creates a proposal, not a published claim.
+  - A department knowledge owner or central governance reviewer approves or rejects the proposal.
+  - Only approved content is embedded and made retrievable.
+  - Reviewers do not receive unrelated private-chat content.
+
+  DISPUTES
+  - Employees can dispute incorrect shared claims.
+  - A disputed claim is immediately marked disputed and removed from ordinary retrieval.
+  - Department owners or central governance review disputes.
+  - The original claim, approval history, and audit trail remain immutable.
+  - Resolution restores the claim or supersedes it with a versioned replacement.
+
+  RETENTION
+  - Shared-memory retention is configurable by department.
+  - Allowed retention is between 30 and 365 days.
+  - Corporate policy may restrict the selectable range.
+  - The specific department defaults remain configurable.
+  - Audit records are retained for 365 days for the POC.
+
+  KNOWLEDGE INGESTION
+  - Implement the two lowest-complexity POC ingestion sources:
+    1. GitHub repositories.
+    2. Portal document upload to S3.
+  - GitHub supports a centrally managed GitHub App and optional per-user OAuth.
+  - Repositories, branches, and paths are allowlisted.
+  - GitHub ingestion supports webhook-driven near-real-time updates and a deployment-configurable polling fallback.
+  - Git commit SHA is the source version.
+  - Portal upload uses pre-signed S3 uploads and event-driven queued ingestion.
+  - S3 Version ID is the source version.
+  - Initial document formats: Markdown, text, and PDF.
+  - Ingestion must be idempotent and preserve provenance, classification, owner, scope, version, and deletion/expiration status.
+
+  SYNTHETIC KNOWLEDGE
+  - agenthub-synthetic-knowledge contains corporate and department-specific synthetic documents.
+  - Department folders: sales, marketing, hr, engineering.
+  - Synthetic classifications include PII, customer data, and financial data.
+  - Sales examples include fake customers, opportunities, contracts, and revenue.
+  - Marketing examples include campaigns, budgets, audiences, and metrics.
+  - HR examples include fake employee profiles, compensation, and policies.
+  - Engineering examples include repositories, runbooks, and incidents.
+  - Required metadata:
+    owner
+    scope
+    department
+    classification
+    retention_days
+    schema_version
+  - Include disputed, expired, unauthorized, and malformed fixtures.
+  - Include negative authorization tests between departments.
+  - Git SHA is the document version for repository-backed knowledge.
+
+  MODEL GOVERNANCE
+  - Employees choose from an approved model list.
+  - Model access is centrally funded.
+  - Cells do not contain model-provider credentials.
+  - A central Model Gateway enforces corporate and department model allowlists, quotas, rate limits, usage measurement, and cost attribution.
+  - Bedrock access uses workload identity.
+  - External provider keys, if used, are stored in Secrets Manager.
+  - The embedding model is fixed platform-wide for the POC.
+  - Exact chat models, providers, and budget thresholds remain deployment configuration.
+
+  TOOLS AND EGRESS
+  - Provide a central Tool Broker.
+  - Cells do not contain production credentials.
+  - Cells have default-deny direct internet access.
+  - Department policy controls access to GitHub, email/calendar, Slack/Teams, internal APIs, and infrastructure tools.
+  - The POC demonstrates GitHub read access and read-only AWS access against a sandbox environment.
+  - Infrastructure writes require explicit approval and a short-lived assumed role.
+  - No real production account access or production mutation is allowed.
+  - Email/calendar, Slack/Teams, and a general connector marketplace are architecture extension points, not POC implementations.
+
+  ADMINISTRATION
+  - The admin portal manages users and cells, Cognito group assignments, model allowlists, connector configuration, retention, tool policy, publication approvals, disputes, and cost visibility.
+  - Cognito remains authoritative for membership even if the portal initiates group changes.
+  - Department owners or central governance configure department policies.
+  - Runtime configuration belongs in the control-plane database.
+  - GitOps owns deployment configuration and non-overridable corporate ceilings.
+  - Do not create two authoritative sources for the same setting.
+
+  AWS AND NETWORK ARCHITECTURE
+  - Single AWS region, spanning two availability zones.
+  - One EKS cluster.
+  - One NAT Gateway is accepted as a documented POC cost compromise and single point of failure.
+  - Use an internet-facing edge/load balancer with TLS and WAF.
+  - Use EFS access points for private cell workspaces.
+  - Use RDS PostgreSQL Multi-AZ with pgvector for shared-memory/control-plane data.
+  - Use versioned, KMS-encrypted S3 for original documents.
+  - Use SQS or equivalent managed queues for asynchronous ingestion.
+  - Do not use OpenSearch, multi-region databases, cross-region EFS, or a second region.
+
+  RELIABILITY
+  - POC recovery objectives: RTO 30 minutes and RPO 5 minutes.
+  - These are architecture and test objectives for component or availability-zone failures, not contractual SLAs.
+  - Regional loss is outside the POC recovery scope.
+  - RDS point-in-time recovery is the primary shared-memory recovery mechanism.
+  - The design must verify whether EFS/private-cell state can satisfy the RPO target or explicitly record an exception and alternative.
+  - Shared memory may be temporarily unavailable while private cells remain usable.
+  - Backup, restore, failover, and degraded-mode behavior must be tested.
+
+  SECURITY AND COMPLIANCE
+  - Apply SOC 2-aligned control design, but do not claim SOC 2 certification.
+  - Use TLS, KMS encryption, Secrets Manager, least privilege, MFA, WAF, CloudTrail, and structured audit events.
+  - Do not log prompt or document bodies by default.
+  - Audit authentication, cell lifecycle, model selection/use, memory retrieval/publication, approvals, disputes, policy changes, connector actions, and administrative actions.
+  - Audit events include actor, subject, action, decision, policy/version, timestamp, correlation ID, and relevant resource identifiers.
+  - CI performs secret scanning, dependency/image scanning, SBOM generation, and image signing.
+
+  INFRASTRUCTURE AS CODE
+  - Terraform is required.
+  - Prefer maintained terraform-aws-modules modules and pin versions.
+  - Thin composition wrappers are allowed.
+  - If no suitable maintained module exists, use native AWS resources and create an ADR explaining the exception.
+  - Candidate modules include VPC, EKS, EKS Pod Identity, RDS, EFS, S3, ECR, IAM, KMS, ALB, ACM, Route53, SQS, EventBridge, and Lambda.
+  - Separate Terraform states: bootstrap, foundation, platform, and data.
+  - Never store secrets or Terraform state in Git.
+
+  DELIVERY
+  - GitHub Actions authenticates to AWS using OIDC; long-lived AWS access keys are prohibited.
+  - Use distinct Terraform plan and apply roles.
+  - Pull requests run format, validation, lint, security scanning, and Terraform plan.
+  - Apply occurs only from protected main after environment approval and a fresh plan of the merge commit.
+  - Application delivery runs tests, builds images, scans, produces an SBOM, signs, and pushes immutable ECR digests.
+  - Argo CD watches deployment configuration under agenthub/deploy.
+  - Use monorepo path filters.
+  - Run scheduled drift detection.
+  - Both repositories require branch protection and CODEOWNERS.
+
+  REPOSITORY STRUCTURE
+  - agenthub target areas:
+    openspec
+    docs/architecture
+    docs/adr
+    docs/threat-model
+    docs/security
+    docs/runbooks
+    infrastructure/bootstrap
+    infrastructure/environments/poc-us-east-2
+    infrastructure/modules
+    platform/apps/admin-portal
+    platform/services
+    platform/workers
+    platform/packages
+    openclaw
+    contracts
+    deploy/helm
+    deploy/argocd
+    tests
+    .github/workflows
+  - agenthub-synthetic-knowledge target areas:
+    corporate
+    departments/sales
+    departments/marketing
+    departments/hr
+    departments/engineering
+    fixtures/disputed
+    fixtures/expired
+    fixtures/unauthorized
+    fixtures/malformed
+    .github/workflows
+
+  NON-GOALS
+  - Production readiness or production SOC 2 certification.
+  - Real corporate, customer, employee, or financial data.
+  - Real production infrastructure access or changes.
+  - Multi-region disaster recovery.
+  - Public signup.
+  - Full email, calendar, Slack, or Teams implementations.
+  - A general connector marketplace.
+  - Employee billing or chargeback.
+  - Arbitrary unreviewed OpenClaw skills.
+  - Hostile-tenant or VM-grade isolation.
+
+  REQUIRED POC OUTCOMES
+  - Ten Cognito users can be assigned to authoritative groups.
+  - A user cannot reach another user's cell or private data.
+  - An idle cell scales to zero and normally wakes within 30 seconds.
+  - Private memory remains private unless explicitly proposed for sharing.
+  - GitHub and S3 changes are ingested using the configured update mode.
+  - Shared content is not retrievable before approval.
+  - Every shared-memory response includes validated provenance.
+  - A dispute quarantines a claim from ordinary retrieval.
+  - Only approved models can be selected.
+  - Department tool and egress policies are enforced.
+  - Infrastructure writes require approval and are limited to a sandbox.
+  - Shared-memory failure does not block private-cell operation.
+  - Scoped recovery exercises meet or explicitly report against RTO and RPO.
+  - All privileged and governance actions are auditable.
+
+  ARCHITECTURE RISKS REQUIRING EXPLICIT ANALYSIS
+  - OpenClaw WebSocket behavior with KEDA HTTP scale-to-zero.
+  - Cognito authentication proxy to OpenClaw Gateway credential bridging and rotation.
+  - Cell mapping and Cognito group-cache invalidation.
+  - Cold-start latency under cluster pressure.
+  - Server-side citation enforcement.
+  - EFS recovery and RPO semantics.
+  - PostgreSQL pgvector performance and connection pooling.
+  - GitHub App versus per-user OAuth identity and permission behavior.
+  - One NAT Gateway as a POC single point of failure.
+  - Separation of runtime configuration from GitOps corporate ceilings.
+
+rules:
+  proposal:
+    - State the business objective, measurable POC outcomes, assumptions, dependencies, non-goals, and accepted cost compromises.
+    - Separate architecture extension points from capabilities implemented in the POC.
+    - List unresolved decisions explicitly instead of silently choosing values.
+    - Describe impact on both repositories when applicable.
+    - Do not describe the POC as production-ready or SOC 2 certified.
+
+  specs:
+    - Use MUST or SHALL for normative requirements.
+    - Give every requirement at least one Given/When/Then scenario.
+    - Include authorization-denial, isolation, audit, failure, and degraded-mode scenarios where relevant.
+    - Make policy precedence and authoritative data sources explicit.
+    - Make provenance, versioning, ownership, retention, and dispute behavior testable.
+    - Distinguish current POC requirements from deferred production capabilities.
+    - Do not use vague terms such as secure, scalable, near-real-time, or highly available without a measurable condition or configuration boundary.
+
+  design:
+    - Include system context, component, trust-boundary, deployment, and principal data-flow diagrams.
+    - Document identity propagation, authorization decisions, credential boundaries, storage ownership, encryption, and network paths.
+    - Include failure modes, recovery behavior, observability, cost compromises, and threat mitigations.
+    - Record significant decisions as proposed ADRs with considered alternatives and consequences.
+    - Surface assumptions that require a spike or proof before implementation.
+
+  tasks:
+    - Order tasks by dependency and include verification alongside implementation.
+    - Prefix cross-repository tasks with [agenthub] or [agenthub-synthetic-knowledge].
+    - Give every implementation slice acceptance tests derived from the specs.
+    - Keep architecture-only changes limited to documents, contracts, repository scaffolding, review, and decomposition.
+    - Do not include AWS provisioning or application implementation in an architecture-only baseline change.
+
+operations:
+  apply:
+    guidance:
+      - Do not apply an architecture-only proposal until the user explicitly approves its proposal, specs, design, and tasks.
+      - Preserve unrelated user changes.
+      - For later implementation changes, run focused validation before broader tests.
+
+
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
