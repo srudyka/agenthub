@@ -1,0 +1,50 @@
+name: AgentHub spike foundation
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Foundation action
+        required: true
+        type: choice
+        options: [plan, apply]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read approved VPC CIDR from Infisical
+        uses: Infisical/secrets-action@v1.0.16
+        with:
+          method: oidc
+          identity-id: ${{ vars.INFISICAL_MECHID_ID }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: ${{ vars.ENV_NAME }}
+          secret-path: /agenthub-spike/
+          export-type: env
+      - name: Assume sandbox apply role
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ env.AGENTHUB_SPIKE_APPLY_ROLE_ARN }}
+          aws-region: us-east-2
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Plan the two-AZ VPC
+        working-directory: infrastructure/environments/poc-us-east-2
+        env:
+          TF_VAR_vpc_cidr: ${{ env.VPC_CIDR }}
+        run: |
+          terraform init
+          terraform validate
+          terraform plan -out=tfplan
+      - name: Apply approved VPC plan
+        if: ${{ inputs.action == 'apply' }}
+        working-directory: infrastructure/environments/poc-us-east-2
+        run: terraform apply -auto-approve tfplan

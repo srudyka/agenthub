@@ -1,0 +1,100 @@
+apiVersion: agenthub.rudyka.org/spike-harness/v1
+kind: HarnessApproval
+metadata:
+  id: dev-spike-harness-approval
+  version: 1
+  environment: dev
+  status: draft
+  # A workflow must reject this record until every REQUIRED field is concrete,
+  # status is approved, and the GitHub environment approval is present.
+spec:
+  correlationId: REQUIRED_AT_APPROVAL
+  namedRiskIds: []
+  purpose: REQUIRED_AT_APPROVAL
+  hypothesis:
+    successCondition: REQUIRED_AT_APPROVAL
+    failureCondition: REQUIRED_AT_APPROVAL
+    degradedModeCondition: REQUIRED_AT_APPROVAL
+
+  sandbox:
+    identifier: agenthub-spike
+    region: us-east-2
+    awsAccountId: discovered-at-runtime
+    accountAllowlistValidation: disabled-by-approved-exception
+    allowedAvailabilityZones: []
+    targetRoleArn: REQUIRED_AT_APPROVAL
+    stateReference: REQUIRED_AT_APPROVAL
+
+  governance:
+    owner: srudyka
+    approvalAuthority: srudyka
+    decision: pending
+    approvedAt: null
+    expiresAt: null
+    executionTimeout: REQUIRED_AT_APPROVAL
+    budget:
+      currency: USD
+      window: P30D
+      cap: 750
+      reviewThresholdsPercent: [50, 80, 100]
+      exceptionReference: null
+
+  workflow:
+    repository: srudyka/agenthub
+    githubEnvironment: dev
+    immutableWorkflowRef: REQUIRED_AT_APPROVAL
+    requiredReviewer: srudyka
+    dispatchInputs:
+      riskId: REQUIRED_AT_APPROVAL
+      approvalRecordId: dev-spike-harness-approval
+      correlationId: REQUIRED_AT_APPROVAL
+      action: REQUIRED_AT_APPROVAL
+
+  infisical:
+    # These are GitHub environment-variable names, not secret values.
+    environmentNameVariable: ENV_NAME
+    machineIdentityIdVariable: INFISICAL_MECHID_ID
+    organizationSlugVariable: INFISICAL_ORG_SLUG
+    projectIdVariable: INFISICAL_PROJECT_ID
+    projectSlugVariable: INFISICAL_PROJECT_SLUG
+    projectEnvironment: dev
+    workloadAuthentication: github-oidc
+    expectedOidcSubject: repo:srudyka/agenthub:environment:dev
+    permittedSecretPaths:
+      - /agenthub-spike/
+      - /agenthub-spike/bootstrap/
+    requiredSecretNames:
+      - VPC_CIDR
+
+  scope:
+    dependencies: []
+    imageDigests:
+      - ghcr.io/openclaw/openclaw:2026.5.26-slim@sha256:ae7ff536446f1bbb57ea51b9b21097d8f299d30d683dcd72644973bc0522f3b3
+    testIdentityReferences: []
+    allowedNetworkPaths: []
+    failureInjections: []
+    exclusions:
+      - agenthub-feature-services
+      - knowledge-corpus
+      - real-regulated-data
+      - production-access
+      - production-credentials
+
+  evidence:
+    recordPath: config/spike-harness/dev/evidence-record.v1.yaml
+    retainForDays: 365
+    requiredOutcomes:
+      - normal
+      - denial
+      - failure
+      - timeout
+      - retry
+      - idempotency
+      - degraded-mode
+      - audit
+
+  teardown:
+    disposition: immediate-after-evidence-capture
+    failureAnalysisRetentionHours: 0
+    renewalRequiredForRetention: true
+    renewedApprovalRecordId: null

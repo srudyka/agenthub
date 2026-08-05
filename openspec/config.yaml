@@ -153,7 +153,7 @@ context: |
   - Cells do not contain model-provider credentials.
   - A central Model Gateway enforces corporate and department model allowlists, quotas, rate limits, usage measurement, and cost attribution.
   - Bedrock access uses workload identity.
-  - External provider keys, if used, are stored in Secrets Manager.
+  - Infisical is authoritative for runtime secrets and sensitive service configuration, including external-provider keys, connector OAuth/webhook credentials, bridge signing material, and sandbox integration credentials.
   - The embedding model is fixed platform-wide for the POC.
   - Exact chat models, providers, and budget thresholds remain deployment configuration.
 
@@ -171,7 +171,7 @@ context: |
   - The admin portal manages users and cells, Cognito group assignments, model allowlists, connector configuration, retention, tool policy, publication approvals, disputes, and cost visibility.
   - Cognito remains authoritative for membership even if the portal initiates group changes.
   - Department owners or central governance configure department policies.
-  - Runtime configuration belongs in the control-plane database.
+  - The control-plane database is authoritative for department policy and governance state; Infisical is authoritative for sensitive runtime configuration and secrets.
   - GitOps owns deployment configuration and non-overridable corporate ceilings.
   - Do not create two authoritative sources for the same setting.
 
@@ -197,7 +197,8 @@ context: |
 
   SECURITY AND COMPLIANCE
   - Apply SOC 2-aligned control design, but do not claim SOC 2 certification.
-  - Use TLS, KMS encryption, Secrets Manager, least privilege, MFA, WAF, CloudTrail, and structured audit events.
+  - Use TLS, KMS encryption, Infisical, least privilege, MFA, WAF, CloudTrail, and structured audit events.
+  - No secret value may be committed to Git, stored in GitHub Actions variables, or logged. User cells cannot read Infisical secrets.
   - Do not log prompt or document bodies by default.
   - Audit authentication, cell lifecycle, model selection/use, memory retrieval/publication, approvals, disputes, policy changes, connector actions, and administrative actions.
   - Audit events include actor, subject, action, decision, policy/version, timestamp, correlation ID, and relevant resource identifiers.
@@ -213,7 +214,7 @@ context: |
   - Never store secrets or Terraform state in Git.
 
   DELIVERY
-  - GitHub Actions authenticates to AWS using OIDC; long-lived AWS access keys are prohibited.
+  - GitHub Actions authenticates to AWS using OIDC; long-lived AWS access keys are prohibited except for the approved one-time AgentHub bootstrap workflow. That workflow retrieves `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from Infisical at runtime, creates only the Terraform-state buckets, GitHub OIDC provider, and sandbox OIDC roles, then is disabled after successful handoff.
   - Use distinct Terraform plan and apply roles.
   - Pull requests run format, validation, lint, security scanning, and Terraform plan.
   - Apply occurs only from protected main after environment approval and a fresh plan of the merge commit.

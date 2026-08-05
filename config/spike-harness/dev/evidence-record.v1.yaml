@@ -1,0 +1,56 @@
+apiVersion: agenthub.rudyka.org/spike-harness/v1
+kind: SpikeEvidenceRecord
+metadata:
+  id: dev-spike-evidence
+  version: 1
+  environment: dev
+  status: pending
+  # This record is a non-executable configuration surface. A workflow creates
+  # a versioned execution result only after a valid HarnessApproval is approved.
+spec:
+  evidenceId: REQUIRED_AT_EXECUTION
+  harnessRecordId: dev-spike-harness-approval
+  riskId: REQUIRED_AT_EXECUTION
+  executionId: REQUIRED_AT_EXECUTION
+  correlationId: REQUIRED_AT_EXECUTION
+
+  lifecycle:
+    result: pending
+    resultReason: null
+    startedAt: null
+    completedAt: null
+    actorOrPrincipal: REQUIRED_AT_EXECUTION
+    idempotencyKey: REQUIRED_AT_EXECUTION
+    supersedesEvidenceId: null
+
+  versionIdentity:
+    approvalRecordVersion: 1
+    immutableWorkflowRef: REQUIRED_AT_EXECUTION
+    configurationVersion: REQUIRED_AT_EXECUTION
+    testSourceVersion: REQUIRED_AT_EXECUTION
+    syntheticInputIdentity: REQUIRED_AT_EXECUTION
+    infisicalReferenceVersion: REQUIRED_AT_EXECUTION
+
+  outcomes:
+    normal: pending
+    failureOrDenial: pending
+    timeoutOrRetry: pending
+    degradedMode: pending
+    # Allowed final result values are pass, fail, indeterminate, and timed_out.
+
+  evidence:
+    auditEventReferences: []
+    measurementReferences: []
+    artifactReferences: []
+    secretValuesPresent: false
+    promptOrDocumentBodiesPresent: false
+
+  retention:
+    retainForDays: 365
+    retentionStartsAfterTeardown: true
+    teardownCompletedAt: null
+    deleteAfter: null
+
+  handoff:
+    adrOrChangeRecommendation: REQUIRED_AT_COMPLETION
+    architectureReviewStatus: pending

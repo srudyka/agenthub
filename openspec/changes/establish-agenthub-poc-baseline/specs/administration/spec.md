@@ -5,7 +5,7 @@ Defines administrative authority, configuration ownership, and tamper-evident ch
 ## ADDED Requirements
 
 ### Requirement: Single-source administration
-The admin portal SHALL manage users/cells, Cognito group changes, policies, connectors, retention, approvals, disputes, and cost visibility. Cognito remains authoritative for membership; control-plane database is authoritative for runtime configuration; GitOps is authoritative for deployment configuration and non-overridable corporate ceilings. The portal SHALL not create a competing authority.
+The admin portal SHALL manage users/cells, Cognito group changes, policies, connector configuration metadata, retention, approvals, disputes, and cost visibility. Cognito remains authoritative for membership; the control-plane database is authoritative for department policy and governance state; Infisical is authoritative for runtime secrets and sensitive service configuration; and GitOps is authoritative for deployment configuration and non-overridable corporate ceilings. The portal SHALL not create a competing authority or expose secret values.
 
 #### Scenario: Group administration
 - **WHEN** an authorized administrator changes group membership through the portal
