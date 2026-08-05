@@ -13,7 +13,7 @@ The POC SHALL allocate one complete OpenClaw Gateway/cell per employee, with a d
 - **THEN** the request SHALL be denied, no target data SHALL be disclosed, and an audit/security event SHALL be emitted.
 
 ### Requirement: Cell credential boundary
-Cell credentials SHALL be scoped to their cell and rotated through the approved bridge design; model-provider and production credentials SHALL be unavailable inside all cells. Credential authority is Secrets Manager/workload identity, not cell configuration.
+Cell credentials SHALL be scoped to their cell. The bridge credential SHALL be audience- and Cognito-`sub`-bound, expire after five minutes, and use signing keys rotated every 30 days; model-provider and production credentials SHALL be unavailable inside all cells. Infisical is authoritative for bridge signing material and other platform secrets; workload identity enforces access and a cell configuration cannot grant or retrieve an Infisical secret.
 
 #### Scenario: Credential exfiltration attempt
 - **WHEN** a cell requests a model-provider or production secret directly
